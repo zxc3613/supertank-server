@@ -5,8 +5,10 @@ var uuidv4 = require('uuid/v4');
 
 var rooms = [];
 
+const maxClientNumber = 6;      //클라이언트 최대 갯수
+
 io.on('connection', function(socket) {
-    console.log('connected');
+    console.log('Connected, 서버에 연결을 했습니다.');
 
     // 방 생성
     var createRoom = function() {
@@ -24,7 +26,7 @@ io.on('connection', function(socket) {
         {
             for (var i = 0; i < rooms.length; i++) 
             {
-                if (rooms[i].clients.length < 2) 
+                if (rooms[i].clients.length < maxClientNumber) 
                 {
                     return i;
                 } 
@@ -43,17 +45,23 @@ io.on('connection', function(socket) {
         {
             // 빈방에 참여
             socket.join(rooms[roomIndex].roomId, function() {
+                // room에 전체 client 수
+                var clientsNumber = rooms[roomIndex].clients.length;
+
+                // 기존 client 정보 가져오기
+                // var firstRoomClient = rooms[roomIndex].clients[0].clientId;      //0번 배열 클라이언트 정보 가져오기
+                var otherClientIds = [];                                           //자신뺴고 이미 들어와있는 클라이언트 정보 가져오기
+                for (var i = 0; i < rooms[roomIndex].clients.length; i++)
+                {
+                    otherClientIds.push(rooms[roomIndex].clients[i].clientId);
+                }
+
                 // 새로운 클라이언트 정보를 rooms.clients에 추가
                 var client = { clientId: socket.id, ready: false }
                 rooms[roomIndex].clients.push(client);
 
-                // room에 전체 client 수
-                var clientsNumber = rooms[roomIndex].clients.length;
-                // 기존 client 정보 가져오기
-                var firstRoomClient = rooms[roomIndex].clients[0].clientId;
-
                 // 지금 방에 참여한 Client에게 보내는 메시지
-                socket.emit('res_joinroom', { roomId: rooms[roomIndex].roomId, otherClientId: firstRoomClient, clientsNumber: clientsNumber });
+                socket.emit('res_joinroom', { roomId: rooms[roomIndex].roomId, otherClientIds: otherClientIds, clientsNumber: clientsNumber });
 
                 // 지금 방에 참여한 Client를 제외한 나머지 방에 있는 Client에게 보내는 메시지
                 socket.to(rooms[roomIndex].roomId).emit('res_otherjoinroom', { roomId: rooms[roomIndex].roomId, otherClientId: socket.id, clientsNumber: clientsNumber });
@@ -113,12 +121,13 @@ io.on('connection', function(socket) {
                 socket.to(room.roomId).emit('res_otherready', { otherClientId: socket.id });
             }
 
-            // 최소 방에 1명 이상인 상황에서 모두가 Ready 했을 경우 Game Play 
-            if (clients.length > 1) 
+            //clients의 client 수가 maxClientNumber와 같을 경우
+            if (clients.length == maxClientNumber) 
             {
                 var cnt = 0;
                 for (var i = 0; i < clients.length; i++) 
                 {
+                    //ready가 true일경우 cnt 올려줘서 레디상태를 확인
                     if (clients[i].ready == true) 
                     {
                         cnt++;
@@ -126,7 +135,7 @@ io.on('connection', function(socket) {
                 }
                 if (clients.length == cnt) 
                 {
-                    // 모두가 True인 상황
+                    // 모두가 True인 상황   //게임 플레이
                     io.in(room.roomId).emit('res_play');
                 }
             }
@@ -178,9 +187,9 @@ io.on('connection', function(socket) {
     });
 
     socket.on('disconnect', function(reason) {
-        console.log('Disconnect');
+        console.log('Disconnect, 서버에 연결을 끊었습니다.');
 
-        var room = rooms.find(room => room.clients.find(client => client.clientId === socket.id))
+        var room = rooms.find(room => room.clients.find(client => client.clientId === socket.id));
         
         if (room) 
         {
